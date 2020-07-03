@@ -1,7 +1,7 @@
-ClimbAssistService
+ClimbAssistInfrastructure
 ============
 
-Welcome to ClimbAssistService!
+Welcome to ClimbAssistInfrastructure!
 
 See it live at [climbassist.com](https://climbassist.com)!
 

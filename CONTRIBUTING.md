@@ -16,7 +16,7 @@ Great! We have a few places to submit issues:
 
 If it's a bug, be sure to include the date and time when you experienced, as well as reproduction steps. If it's a
 feature request, try to be crisp and break it into manageable tasks. We only have a couple maintainers right now, so
-we can't guarantee that we will be able to look at it right away, but we'll do our best! 
+we can't guarantee that we will be able to look at it right away, but we'll do our best!
 
 I Want to Help
 --------------
@@ -36,7 +36,7 @@ it as soon as we can!
 
 I Want to Help but I Don't Know Anything About Climbing!
 --------------------------------------------------------
-That's fine! You don't need a super in-depth knowledge of climbing to help. At least 50% of ClimbAssistService has
+That's fine! You don't need a super in-depth knowledge of climbing to help. At least 50% of Climb Assist has
 nothing to do with climbing. Dive right in!
 
 That being said, hit us up some time if you want an intro to climbing :)
