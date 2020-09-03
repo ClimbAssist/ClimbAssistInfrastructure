@@ -5,7 +5,7 @@ Resources:
   CloudFormationTrustRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ClimbAssistCloudFormationRole
+      RoleName: ClimbAssistCloudFormationRole
       AssumeRolePolicyDocument:
         Statement:
         - Action: sts:AssumeRole
@@ -92,6 +92,7 @@ Resources:
             - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SesVerifiedEmailIdentityRole*
             - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ClimbAssistElasticBeanstalkWorkerRole*
             - !GetAtt EBTrustRole.Arn
+            - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/RecaptchaBackDoorResponseRole*
           - Action:
             - iam:CreateInstanceProfile
             - iam:AddRoleToInstanceProfile
@@ -124,6 +125,12 @@ Resources:
             - route53:GetChange
             Effect: Allow
             Resource: '*'
+          - Action:
+            - secretsmanager:CreateSecret
+            - secretsmanager:TagResource
+            - secretsmanager:DeleteSecret
+            Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:RecaptchaBackDoorResponse*
+            Effect: Allow
           # These are to avoid accidentally deleting anything important, like our S3 buckets or DynamoDB tables
           - Action:
             - dynamodb:Delete*
