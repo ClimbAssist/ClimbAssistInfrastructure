@@ -93,6 +93,7 @@ Resources:
             - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ClimbAssistElasticBeanstalkWorkerRole*
             - !GetAtt EBTrustRole.Arn
             - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/RecaptchaBackDoorResponseRole*
+            - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ClimbAssistWebpConverter*
           - Action:
             - iam:CreateInstanceProfile
             - iam:AddRoleToInstanceProfile
@@ -132,6 +133,9 @@ Resources:
             - secretsmanager:TagResource
             - secretsmanager:RotateSecret
             Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:RecaptchaBackDoorResponse*
+            Effect: Allow
+          - Action: cloudformation:CreateChangeSet
+            Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
             Effect: Allow
           # These are to avoid accidentally deleting anything important, like our S3 buckets or DynamoDB tables
           - Action:
@@ -177,7 +181,8 @@ Resources:
       PolicyName: CodeBuildPolicy
       Roles:
       - !Ref CodeBuildRole
-      - !Ref IntegrationTestRole
+      - !Ref ClimbAssistServiceIntegrationTestRole
+      - !Ref WebpConverterIntegrationTestRole
   ClimbAssistServiceCodeBuildProject:
     Type: AWS::CodeBuild::Project
     DependsOn: CodeBuildPolicy
@@ -257,7 +262,9 @@ Resources:
             Resource:
             - !GetAtt ClimbAssistServiceCodeBuildProject.Arn
             - !GetAtt ClimbAssistUICodeBuildProject.Arn
-            - !GetAtt IntegrationTestsCodeBuildProject.Arn
+            - !GetAtt ClimbAssistServiceIntegrationTestsCodeBuildProject.Arn
+            - !GetAtt ClimbAssistWebpConverterCodeBuildProject.Arn
+            - !GetAtt WebpConverterIntegrationTestsCodeBuildProject.Arn
           - Action:
             - elasticbeanstalk:*
             Effect: Allow
@@ -289,6 +296,7 @@ Resources:
             Effect: Allow
             Resource:
             - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/awscodestar-climbassist-infrastructure*
+            - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/ClimbAssistWebpConverter*
           - Action: iam:PassRole
             Effect: Allow
             Resource: !GetAtt CloudFormationTrustRole.Arn
@@ -412,7 +420,7 @@ Resources:
             Provider: CodeBuild
             Version: 1
           Configuration:
-            ProjectName: !Ref IntegrationTestsCodeBuildProject
+            ProjectName: !Ref ClimbAssistServiceIntegrationTestsCodeBuildProject
             PrimarySource: ClimbAssistServiceSourceArtifact
           InputArtifacts:
           - Name: ClimbAssistServiceSourceArtifact
@@ -509,7 +517,7 @@ Resources:
         Value: !Sub climbassist-S3Bucket
       VersioningConfiguration:
         Status: Enabled
-  IntegrationTestsCodeBuildProject:
+  ClimbAssistServiceIntegrationTestsCodeBuildProject:
     Type: AWS::CodeBuild::Project
     DependsOn: CodeBuildPolicy
     Properties:
@@ -523,13 +531,13 @@ Resources:
         EnvironmentVariables:
         - Name: ResourceNameSuffix
           Value: -beta
-      Name: !Sub climbassist-integration-tests
-      ServiceRole: !Ref IntegrationTestRole
+      Name: !Sub ClimbAssistServiceIntegrationTests
+      ServiceRole: !Ref ClimbAssistServiceIntegrationTestRole
       Source:
         BuildSpec: buildspec-integration-tests.yml
         Type: codepipeline
       TimeoutInMinutes: 480 # 8 hours, maximum
-  IntegrationTestRole:
+  ClimbAssistServiceIntegrationTestRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub ClimbAssistIntegrationTestRole
@@ -581,3 +589,162 @@ Resources:
           - Action: s3:GetObject
             Effect: Allow
             Resource: !Sub arn:${AWS::Partition}:s3:::models-${AWS::AccountId}-${AWS::Region}*
+          - Action: secretsmanager:GetSecretValue
+            Effect: Allow
+            Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:RecaptchaBackDoorResponse*
+
+  ClimbAssistWebpConverterCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    DependsOn: CodeBuildPolicy
+    Properties:
+      Artifacts:
+        Packaging: zip
+        Type: codepipeline
+      Environment:
+        ComputeType: small
+        EnvironmentVariables:
+        - Name: S3_BUCKET
+          Value: !Ref S3Bucket
+        Image: aws/codebuild/standard:3.0
+        Type: LINUX_CONTAINER
+      Name: ClimbAssistWebpConverter
+      ServiceRole: !Ref CodeBuildRole
+      Source:
+        BuildSpec: buildspec.yml
+        Type: codepipeline
+  WebpConverterIntegrationTestsCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    DependsOn: CodeBuildPolicy
+    Properties:
+      Artifacts:
+        Packaging: zip
+        Type: codepipeline
+      Environment:
+        ComputeType: small
+        Image: aws/codebuild/standard:3.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+        - Name: PHOTOS_S3_BUCKET
+          Value: !Sub photos-${AWS::AccountId}-${AWS::Region}-beta
+        - Name: LAMBDA_FUNCTION_NAME
+          Value: ClimbAssistWebpConverter-beta
+      Name: !Sub ClimbAssistWebpConverterIntegrationTests
+      ServiceRole: !Ref WebpConverterIntegrationTestRole
+      Source:
+        BuildSpec: buildspec-integration-tests.yml
+        Type: codepipeline
+      TimeoutInMinutes: 480 # 8 hours, maximum
+  WebpConverterIntegrationTestRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ClimbAssistWebpConverterIntegrationTestRole
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service: codebuild.amazonaws.com
+      Policies:
+      - PolicyName: IntegrationTestPolicy
+        PolicyDocument:
+          Statement:
+          - Action:
+            - s3:DeleteObject
+            - s3:GetObject
+            - s3:PutObject
+            Effect: Allow
+            Resource: !Sub arn:${AWS::Partition}:s3:::photos-${AWS::AccountId}-${AWS::Region}-beta/*
+          - Action: lambda:InvokeFunction
+            Effect: Allow
+            Resource: !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:ClimbAssistWebpConverter-beta
+  WebpConverterPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: ClimbAssistWebpConverter
+      ArtifactStore:
+        Location: !Ref S3Bucket
+        Type: S3
+      RoleArn: !GetAtt CodePipelineTrustRole.Arn
+      Stages:
+      - Name: Source
+        Actions:
+        - Name: ClimbAssistWebpConverter
+          ActionTypeId:
+            Category: Source
+            Owner: ThirdParty
+            Provider: GitHub
+            Version: 1
+          Configuration:
+            Owner: ClimbAssist
+            Repo: ClimbAssistWebpConverter
+            Branch: master
+            PollForSourceChanges: false
+            # Created by hand
+            OAuthToken: '{{resolve:secretsmanager:ClimbAssistGitHubPersonalAccessToken}}'
+          OutputArtifacts:
+          - Name: ClimbAssistWebpConverterSourceArtifact
+      - Name: Build
+        Actions:
+        - Name: ClimbAssistWebpConverter
+          ActionTypeId:
+            Category: Build
+            Owner: AWS
+            Provider: CodeBuild
+            Version: 1
+          Configuration:
+            ProjectName: !Ref ClimbAssistWebpConverterCodeBuildProject
+          InputArtifacts:
+          - Name: ClimbAssistWebpConverterSourceArtifact
+          OutputArtifacts:
+          - Name: ClimbAssistWebpConverterBuildArtifact
+      - Name: Beta
+        Actions:
+        - Name: Deploy
+          ActionTypeId:
+            Category: Deploy
+            Owner: AWS
+            Provider: CloudFormation
+            Version: 1
+          Configuration:
+            ActionMode: CREATE_UPDATE
+            Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
+            ParameterOverrides: !Sub |
+              {
+                "ResourceNameSuffix": "-beta"
+              }
+            RoleArn: !GetAtt CloudFormationTrustRole.Arn
+            StackName: !Sub ClimbAssistWebpConverter-beta
+            TemplatePath: ClimbAssistWebpConverterBuildArtifact::template-export.yml
+          InputArtifacts:
+          - Name: ClimbAssistWebpConverterBuildArtifact
+          OutputArtifacts:
+          - Name: ClimbAssistWebpConverterDeployArtifact
+      - Name: IntegrationTests
+        Actions:
+        - Name: IntegrationTests
+          ActionTypeId:
+            Category: Build
+            Owner: AWS
+            Provider: CodeBuild
+            Version: 1
+          Configuration:
+            ProjectName: !Ref WebpConverterIntegrationTestsCodeBuildProject
+            PrimarySource: ClimbAssistWebpConverterSourceArtifact
+          InputArtifacts:
+          - Name: ClimbAssistWebpConverterSourceArtifact
+      - Name: Prod
+        Actions:
+        - Name: Deploy
+          ActionTypeId:
+            Category: Deploy
+            Owner: AWS
+            Provider: CloudFormation
+            Version: 1
+          Configuration:
+            ActionMode: CREATE_UPDATE
+            Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
+            RoleArn: !GetAtt CloudFormationTrustRole.Arn
+            StackName: !Sub ClimbAssistWebpConverter
+            TemplatePath: ClimbAssistWebpConverterBuildArtifact::template-export.yml
+          InputArtifacts:
+          - Name: ClimbAssistWebpConverterBuildArtifact
