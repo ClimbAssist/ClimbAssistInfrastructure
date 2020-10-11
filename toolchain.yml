@@ -657,6 +657,20 @@ Resources:
           - Action: lambda:InvokeFunction
             Effect: Allow
             Resource: !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:ClimbAssistWebpConverter-beta
+  ClimbAssistWebpConverterGitHubPipelineWebhook:
+    Type: AWS::CodePipeline::Webhook
+    Properties:
+      Authentication: GITHUB_HMAC
+      AuthenticationConfiguration:
+        # Created by hand
+        SecretToken: '{{resolve:secretsmanager:ClimbAssistServiceWebhookSecret}}'
+      Filters:
+      - JsonPath: "$.ref"
+        MatchEquals: refs/heads/master
+      RegisterWithThirdParty: true
+      TargetPipeline: !Ref WebpConverterPipeline
+      TargetPipelineVersion: !GetAtt WebpConverterPipeline.Version
+      TargetAction: ClimbAssistWebpConverter
   WebpConverterPipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
