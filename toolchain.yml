@@ -588,7 +588,9 @@ Resources:
                 sns:Protocol: sqs
           - Action: s3:GetObject
             Effect: Allow
-            Resource: !Sub arn:${AWS::Partition}:s3:::models-${AWS::AccountId}-${AWS::Region}*
+            Resource:
+            - !Sub arn:${AWS::Partition}:s3:::models-${AWS::AccountId}-${AWS::Region}*
+            - !Sub arn:${AWS::Partition}:s3:::photos-${AWS::AccountId}-${AWS::Region}*
           - Action: secretsmanager:GetSecretValue
             Effect: Allow
             Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:RecaptchaBackDoorResponse*
